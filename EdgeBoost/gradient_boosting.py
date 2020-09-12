@@ -512,7 +512,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         return len(self.predictors_)
 
 
-class GradientBoostingRegressor(BaseGradientBoostingMachine, RegressorMixin):
+class GradientBoostingRegressor(GradientBoostingMachine, RegressorMixin):
     """Scikit-learn compatible Gradient Boosting Tree for regression.
 
     Parameters
@@ -638,7 +638,7 @@ class GradientBoostingRegressor(BaseGradientBoostingMachine, RegressorMixin):
         return _LOSSES[self.loss]()
 
 
-class GradientBoostingClassifier(BaseGradientBoostingMachine, ClassifierMixin):
+class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
 
     """Scikit-learn compatible Gradient Boosting Tree for classification.
 
