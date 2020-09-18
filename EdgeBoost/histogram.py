@@ -1,11 +1,11 @@
-"""This module contains njitted routines for building histograms.
+"""This module contains jitted routines for building histograms.
 
 A histogram is an array with n_bins entry of type HISTOGRAM_DTYPE. Each
 feature has its own histogram. A histogram contains the sum of gradients and
 hessians of all the samples belonging to each bin.
 """
 import numpy as np
-from numba import njit
+from numba.cuda import jit
 
 HISTOGRAM_DTYPE = np.dtype([
     ('sum_gradients', np.float32),
@@ -14,7 +14,7 @@ HISTOGRAM_DTYPE = np.dtype([
 ])
 
 
-@njit
+@jit
 def _build_histogram_naive(n_bins, sample_indices, binned_feature,
                            ordered_gradients, ordered_hessians):
     """Build histogram in a naive way, without optimizing for cache hit."""
@@ -27,7 +27,7 @@ def _build_histogram_naive(n_bins, sample_indices, binned_feature,
     return histogram
 
 
-@njit
+@jit
 def _subtract_histograms(n_bins, hist_a, hist_b):
     """Return hist_a - hist_b"""
 
@@ -45,7 +45,7 @@ def _subtract_histograms(n_bins, hist_a, hist_b):
     return histogram
 
 
-@njit
+@jit
 def _build_histogram(n_bins, sample_indices, binned_feature, ordered_gradients,
                      ordered_hessians):
     """Return histogram for a given feature."""
@@ -83,7 +83,7 @@ def _build_histogram(n_bins, sample_indices, binned_feature, ordered_gradients,
     return histogram
 
 
-@njit
+@jit
 def _build_histogram_no_hessian(n_bins, sample_indices, binned_feature,
                                 ordered_gradients):
     """Return histogram for a given feature.
@@ -118,7 +118,7 @@ def _build_histogram_no_hessian(n_bins, sample_indices, binned_feature,
     return histogram
 
 
-@njit
+@jit
 def _build_histogram_root_no_hessian(n_bins, binned_feature, all_gradients):
     """Special case for the root node
 
@@ -156,7 +156,7 @@ def _build_histogram_root_no_hessian(n_bins, binned_feature, all_gradients):
     return histogram
 
 
-@njit
+@jit
 def _build_histogram_root(n_bins, binned_feature, all_gradients,
                           all_hessians):
     """Special case for the root node
