@@ -124,6 +124,7 @@ def test_one_sample_one_feature():
 def test_early_stopping_regression(scoring, validation_split,
                                    n_iter_no_change, tol):
 
+    print('what')
     max_iter = 500
 
     X, y = make_regression(random_state=0)
@@ -136,6 +137,7 @@ def test_early_stopping_regression(scoring, validation_split,
                                    n_iter_no_change=n_iter_no_change,
                                    random_state=0)
     gb.fit(X, y)
+    print(gb.predict(X))
 
     if n_iter_no_change is not None:
         assert n_iter_no_change <= gb.n_iter_ < max_iter

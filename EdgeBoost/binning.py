@@ -11,7 +11,7 @@ import sklearn
 from sklearn.utils import check_random_state, check_array
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted
-from numba import cuda
+from numba import jit
 
 
 
@@ -35,7 +35,7 @@ def _map_to_bins(data, binning_thresholds, missing_values_bin_idx,binned):
                              binned[:, feature_idx])
 
 
-@cuda.jit(parallel=True)
+# @jit(parallel=True)
 def _map_num_col_to_bins(data,binning_thresholds,missing_values_bin_idx,binned):
     """Binary search to find the bin index for each value in the data."""
 

@@ -10,7 +10,7 @@ from scipy.special import expit, logsumexp
 from sklearn.random_projection import SparseRandomProjection
 import numpy as np
 from numba import njit, prange
-from numba.cuda import jit
+from numba import jit
 
 from .utils import get_threads_chunks
 
@@ -74,9 +74,9 @@ class BaseLoss(ABC):
         proj_gradients, proj_hessians = self.randomly_project_gradients_and_hessians(gradients, hessians)
         return gradients, hessians, proj_gradients, proj_hessians
 
-    @jit
-    def randomly_project_gradients_and_hessians(self, gradients, hessians):
-        proj_g = SparseRandomProjection(n_components=1, random_state=self.random_state).fit_transform(X=gradients)
+
+    def randomly_project_gradients_and_hessians(self, gradients, hessians,random_state=42):
+        proj_g = SparseRandomProjection(n_components=1, random_state=random_state).fit_transform(X=gradients)
         proj_h = hessians #SparseRandomProjection(n_components=1, random_state=self.random_state).fit_transform(X=hessians)
         return proj_g.ravel().astype(np.float32), proj_h.astype(np.float32)
 

@@ -4,9 +4,14 @@ import numpy as np
 from time import time
 import sklearn
 from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin
+from sklearn.metrics import check_scoring
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import check_X_y, check_random_state, check_array
-from numba import cuda
+from numba import cuda, prange
+from sklearn.utils.multiclass import check_classification_targets
+from sklearn.utils.validation import check_is_fitted
+
 from .binning import BinMapper
 
 from .grower import TreeGrower

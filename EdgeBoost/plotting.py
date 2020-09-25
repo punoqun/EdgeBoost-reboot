@@ -1,7 +1,8 @@
 from graphviz import Digraph
 
-from pygbm import BaseGradientBoostingMachine
-import pygbm
+from EdgeBoost import GradientBoostingMachine
+from EdgeBoost import grower
+import EdgeBoost
 
 
 def plot_tree(est_or_grower, est_lightgbm=None, tree_index=0, view=True,
@@ -28,7 +29,7 @@ def plot_tree(est_or_grower, est_lightgbm=None, tree_index=0, view=True,
     Example: plotting.plot_tree(est_pygbm, est_lightgbm, view=False,
     filename='output') will silently save output to output.pdf
     """
-    def make_pygbm_tree():
+    def make_edgeboost_tree():
         def add_predictor_node(node_idx, parent=None, decision=None):
             iteration = tree_index // est_or_grower.n_trees_per_iteration_
             k = tree_index % est_or_grower.n_trees_per_iteration_
@@ -89,9 +90,9 @@ def plot_tree(est_or_grower, est_lightgbm=None, tree_index=0, view=True,
             if parent is not None:
                 graph.edge(parent, name, decision)
 
-        if isinstance(est_or_grower, BaseGradientBoostingMachine):
+        if isinstance(est_or_grower, GradientBoostingMachine):
             add_predictor_node(0)
-        elif isinstance(est_or_grower, pygbm.grower.TreeGrower):
+        elif isinstance(est_or_grower, EdgeBoost.grower.TreeGrower):
             add_grower_node(est_or_grower.root)
 
     # make lightgbm tree
@@ -105,8 +106,6 @@ def plot_tree(est_or_grower, est_lightgbm=None, tree_index=0, view=True,
             **kwargs)
     else:
         graph = Digraph(**kwargs)
-
-    # make pygbm tree
-    make_pygbm_tree()
+    make_edgeboost_tree()
 
     graph.render(view=view)
