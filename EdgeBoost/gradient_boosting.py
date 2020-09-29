@@ -17,6 +17,7 @@ from .binning import BinMapper
 from .grower import TreeGrower
 from .loss import _LOSSES
 
+
 class GradientBoostingMachine(BaseEstimator, ABC):
     @abstractmethod
     def __init__(self, loss, learning_rate, max_iter, max_leaf_nodes,
@@ -495,13 +496,11 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                 predict = (predictor.predict_binned_multi if is_binned
                            else predictor.predict_multi)
                 tmp = predict(X, self.prediction_dim)
-                if tmp.dtype !='float32':
+                if tmp.dtype != 'float32':
                     print(tmp)
-                raw_predictions = np.add(raw_predictions,predict(X, self.prediction_dim))
+                raw_predictions = np.add(raw_predictions, predict(X, self.prediction_dim))
 
         return raw_predictions
-
-
 
     @abstractmethod
     def _get_loss(self):
@@ -644,7 +643,6 @@ class GradientBoostingRegressor(GradientBoostingMachine, RegressorMixin):
 
 
 class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
-
     """Scikit-learn compatible Gradient Boosting Tree for classification.
 
     Parameters

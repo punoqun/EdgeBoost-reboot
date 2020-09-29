@@ -85,9 +85,9 @@ class SplitInfo:
     ('ordered_hessians', float32[::1]),
     ('sum_gradients', float32),
     ('sum_hessians', float32),
-    ('full_gradients', float32[::1]),
+    ('full_gradients', float32[::1, :]),
     ('full_hessians', float32[::1]),
-    ('ordered_full_gradients', float32[::1]),
+    ('ordered_full_gradients', float32[::1,:]),
     ('ordered_full_hessians', float32[::1]),
     ('sum_full_gradients', float32[::1]),
     ('sum_full_hessians', float32),
@@ -139,7 +139,7 @@ class SplittingContext:
     def __init__(self, X_binned, max_bins, n_bins_per_feature,
                  gradients, hessians, full_gradients, full_hessians, l2_regularization,
                  min_hessian_to_split=1e-3, min_samples_leaf=20,
-                 min_gain_to_split=0., output_size=50):
+                 min_gain_to_split=0.):
 
         self.X_binned = X_binned
         self.n_features = X_binned.shape[1]
@@ -170,7 +170,7 @@ class SplittingContext:
             self.constant_hessian_value = self.hessians[0]  # 1 scalar
         else:
             self.constant_hessian_value = float32(1.)  # won't be used anyway
-        self.output_size = len(full_gradients[0])
+        # self.output_size = len(full_gradients[0])
         # The partition array maps each sample index into the leaves of the
         # tree (a leaf in this context is a node that isn't splitted yet, not
         # necessarily a 'finalized' leaf). Initially, the root contains all
