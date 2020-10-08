@@ -80,14 +80,12 @@ class TreeNode:
     hist_subtraction = False
 
     def __init__(self, depth, sample_indices, sum_gradients,
-                 sum_hessians, sum_full_gradients, sum_full_hessians, parent=None):
+                 sum_hessians, parent=None):
         self.depth = depth
         self.sample_indices = sample_indices
         self.n_samples = sample_indices.shape[0]
         self.sum_gradients = sum_gradients
         self.sum_hessians = sum_hessians
-        self.sum_full_gradients = sum_full_gradients
-        self.sum_full_hessians = sum_full_hessians
         self.parent = parent
 
     def __repr__(self):
@@ -164,7 +162,7 @@ class TreeGrower:
         The shrinkage parameter to apply to the leaves values, also known as
         learning rate.
     """
-    def __init__(self, X_binned, gradients, hessians, full_gradients, full_hessians, max_leaf_nodes=None,
+    def __init__(self, X_binned, gradients, hessians, full_gradients, max_leaf_nodes=None,
                  max_depth=None, min_samples_leaf=20, min_gain_to_split=0.,
                  max_bins=256, n_bins_per_feature=None, l2_regularization=0.,
                  min_hessian_to_split=1e-3, shrinkage=1.):
@@ -183,7 +181,7 @@ class TreeGrower:
 
         self.splitting_context = SplittingContext(
             X_binned, max_bins, n_bins_per_feature, gradients,
-            hessians, full_gradients, full_hessians, l2_regularization, min_hessian_to_split,
+            hessians, l2_regularization, min_hessian_to_split,
             min_samples_leaf, min_gain_to_split)
         self.max_leaf_nodes = max_leaf_nodes
         self.max_depth = max_depth
@@ -197,6 +195,8 @@ class TreeGrower:
         self.total_apply_split_time = 0.  # time spent splitting nodes
         self._intilialize_root()
         self.n_nodes = 1
+        self.full_gradients = full_gradients
+
 
     def _validate_parameters(self, X_binned, max_leaf_nodes, max_depth,
                              min_samples_leaf, min_gain_to_split,
@@ -249,9 +249,7 @@ class TreeGrower:
             depth=depth,
             sample_indices=self.splitting_context.partition.view(),
             sum_gradients=self.splitting_context.gradients.sum(),
-            sum_hessians=hessian,
-            sum_full_gradients=self.splitting_context.full_gradients.sum(),
-            sum_full_hessians=hessian
+            sum_hessians=hessian
         )
         if (self.max_leaf_nodes is not None and self.max_leaf_nodes == 1):
             self._finalize_leaf(self.root)
@@ -406,8 +404,9 @@ class TreeGrower:
         XGBoost: A Scalable Tree Boosting System, T. Chen, C. Guestrin, 2016
         https://arxiv.org/abs/1603.02754
         """
-        node.value = -self.shrinkage * node.sum_full_gradients / (
-            node.sum_full_hessians + self.splitting_context.l2_regularization)
+
+        node.value = -self.shrinkage * np.sum(a=self.full_gradients[node.sample_indices, :]) / (
+            node.sum_hessians + self.splitting_context.l2_regularization)
         self.finalized_leaves.append(node)
 
     def _finalize_splittable_nodes(self):

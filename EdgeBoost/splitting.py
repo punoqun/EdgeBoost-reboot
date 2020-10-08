@@ -6,9 +6,7 @@
   into the newly created left and right childs.
 """
 import numpy as np
-from numba import njit, prange, float32, uint8, uint32
-from numba.experimental import jitclass
-from numba.cuda import jit
+from numba import njit, jitclass, prange, float32, uint8, uint32
 import numba
 
 from .histogram import _build_histogram
@@ -18,7 +16,6 @@ from .histogram import _build_histogram_root
 from .histogram import _build_histogram_root_no_hessian
 from .histogram import HISTOGRAM_DTYPE
 from .utils import get_threads_chunks
-
 
 
 @jitclass([
@@ -56,7 +53,6 @@ class SplitInfo:
     n_samples_right : int
         The number of samples in the right child
     """
-
     def __init__(self, gain=-1., feature_idx=0, bin_idx=0,
                  gradient_left=0., hessian_left=0.,
                  gradient_right=0., hessian_right=0.,
@@ -85,12 +81,6 @@ class SplitInfo:
     ('ordered_hessians', float32[::1]),
     ('sum_gradients', float32),
     ('sum_hessians', float32),
-    ('full_gradients', float32[::1, :]),
-    ('full_hessians', float32[::1]),
-    ('ordered_full_gradients', float32[::1,:]),
-    ('ordered_full_hessians', float32[::1]),
-    ('sum_full_gradients', float32[::1]),
-    ('sum_full_hessians', float32),
     ('constant_hessian', uint8),
     ('constant_hessian_value', float32),
     ('l2_regularization', float32),
@@ -135,9 +125,8 @@ class SplittingContext:
         The minimum gain needed to split a node. Splits with lower gain will
         be ignored.
     """
-
     def __init__(self, X_binned, max_bins, n_bins_per_feature,
-                 gradients, hessians, full_gradients, full_hessians, l2_regularization,
+                 gradients, hessians, l2_regularization,
                  min_hessian_to_split=1e-3, min_samples_leaf=20,
                  min_gain_to_split=0.):
 
@@ -154,13 +143,6 @@ class SplittingContext:
         self.ordered_hessians = hessians.copy()
         self.sum_gradients = self.gradients.sum()
         self.sum_hessians = self.hessians.sum()
-        self.full_gradients = full_gradients
-        self.full_hessians = full_hessians
-        # for root node, gradients and hessians are already ordered
-        self.ordered_full_gradients = full_gradients.copy()
-        self.ordered_full_hessians = full_hessians.copy()
-        self.sum_full_gradients = np.sum(self.full_gradients, axis=0)
-        self.sum_full_hessians = np.sum(self.full_hessians, axis=0)
         self.constant_hessian = hessians.shape[0] == 1
         self.l2_regularization = l2_regularization
         self.min_hessian_to_split = min_hessian_to_split
@@ -170,7 +152,7 @@ class SplittingContext:
             self.constant_hessian_value = self.hessians[0]  # 1 scalar
         else:
             self.constant_hessian_value = float32(1.)  # won't be used anyway
-        # self.output_size = len(full_gradients[0])
+
         # The partition array maps each sample index into the leaves of the
         # tree (a leaf in this context is a node that isn't splitted yet, not
         # necessarily a 'finalized' leaf). Initially, the root contains all
@@ -608,7 +590,6 @@ def _split_gain(gradient_left, hessian_left, gradient_right, hessian_right,
     XGBoost: A Scalable Tree Boosting System, T. Chen, C. Guestrin, 2016
     https://arxiv.org/abs/1603.02754
     """
-
     def negative_loss(gradient, hessian):
         return (gradient ** 2) / (hessian + l2_regularization)
 
