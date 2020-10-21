@@ -5,7 +5,7 @@ feature has its own histogram. A histogram contains the sum of gradients and
 hessians of all the samples belonging to each bin.
 """
 import numpy as np
-from numba.cuda import jit
+from numba import jit
 
 HISTOGRAM_DTYPE = np.dtype([
     ('sum_gradients', np.float32),

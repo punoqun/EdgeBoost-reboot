@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from time import time
 import sklearn
+from numba import jit, njit
 from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin
 from sklearn.metrics import check_scoring
 from sklearn.model_selection import train_test_split
@@ -493,8 +494,8 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         # Should we parallelize this?
         for predictors_of_ith_iteration in self.predictors_:
             for k, predictor in enumerate(predictors_of_ith_iteration):
-                predict = (predictor.predict_binned_multi if is_binned
-                           else predictor.predict_multi)
+                predict = (predictor.predict_binned if is_binned
+                           else predictor.predict)
                 tmp = predict(X, self.prediction_dim)
                 if tmp.dtype != 'float32':
                     print(tmp)
@@ -787,7 +788,7 @@ class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
         return _LOSSES[self.loss]()
 
 
-@cuda.jit(parallel=True)
+@jit(parallel=True)
 def _update_raw_predictions(leaves_data, raw_predictions):
     """Update raw_predictions by reading the predictions of the ith tree
     directly form the leaves.

@@ -74,7 +74,7 @@ def get_threads_chunks(total_size):
     regions, and the starts and ends of each region are returned. Used to
     simulate a 'static' scheduling.
     """
-    n_threads = numba_config.NUMBA_DEFAULT_NUM_THREADS
+    n_threads = 8 #numba_config.NUMBA_DEFAULT_NUM_THREADS
     sizes = np.full(n_threads, total_size // n_threads, dtype=np.int32)
     if total_size % n_threads > 0:
         # array[:0] will cause a bug in numba 0.41 so we need the if.

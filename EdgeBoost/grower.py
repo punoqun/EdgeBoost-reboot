@@ -1,14 +1,15 @@
 """
 This module contains the TreeGrower class.
 
-TreeGrowee builds a regression tree fitting a Newton-Raphson step, based on
+TreeGrower builds a regression tree fitting a Newton-Raphson step, based on
 the gradients and hessians of the training data.
 """
 from heapq import heappush, heappop
 import numpy as np
 from time import time
-from numba.cuda import jit
+
 from numba import prange
+from numba.cuda import jit
 
 from .splitting import (SplittingContext, split_indices, find_node_split,
                         find_node_split_subtraction)
@@ -162,6 +163,7 @@ class TreeGrower:
         The shrinkage parameter to apply to the leaves values, also known as
         learning rate.
     """
+
     def __init__(self, X_binned, gradients, hessians, full_gradients, max_leaf_nodes=None,
                  max_depth=None, min_samples_leaf=20, min_gain_to_split=0.,
                  max_bins=256, n_bins_per_feature=None, l2_regularization=0.,
@@ -196,7 +198,6 @@ class TreeGrower:
         self._intilialize_root()
         self.n_nodes = 1
         self.full_gradients = full_gradients
-
 
     def _validate_parameters(self, X_binned, max_leaf_nodes, max_depth,
                              min_samples_leaf, min_gain_to_split,
@@ -303,6 +304,8 @@ class TreeGrower:
                     self.splitting_context, node.sample_indices)
             toc = time()
             node.find_split_time = toc - tic
+            if node.find_split_time == 0.:
+                node.find_split_time = 0.0001
             self.total_find_split_time += node.find_split_time
             node.construction_speed = node.n_samples / node.find_split_time
             node.split_info = split_info
@@ -404,10 +407,17 @@ class TreeGrower:
         XGBoost: A Scalable Tree Boosting System, T. Chen, C. Guestrin, 2016
         https://arxiv.org/abs/1603.02754
         """
+        bottom_part = node.sum_hessians + self.splitting_context.l2_regularization
+        node.value = self._array_sum(node.sample_indices, bottom_part)
 
-        node.value = -self.shrinkage * np.sum(a=self.full_gradients[node.sample_indices, :]) / (
-            node.sum_hessians + self.splitting_context.l2_regularization)
-        self.finalized_leaves.append(node)
+    def _array_sum(self, sample_indices, bottom_part):
+        summed_array = np.zeros(self.full_gradients.shape[1])
+        for sample_idx in sample_indices:
+            gradient = self.full_gradients[sample_idx]
+            gradient = gradient * (-self.shrinkage)
+            gradient = gradient / bottom_part
+            summed_array = summed_array + gradient
+        return summed_array
 
     def _finalize_splittable_nodes(self):
         """Transform all splittable nodes into leaves.
@@ -431,6 +441,19 @@ class TreeGrower:
         -------
         A TreePredictor object.
         """
+        value_size = str(self.full_gradients.shape[1]) + 'f8'
+        PREDICTOR_RECORD_DTYPE = np.dtype([
+            ('is_leaf', np.uint8),
+            ('value', value_size),
+            ('count', np.uint32),
+            ('feature_idx', np.uint32),
+            ('bin_threshold', np.uint8),
+            ('threshold', np.float32),
+            ('left', np.uint32),
+            ('right', np.uint32),
+            ('gain', np.float32),
+            ('depth', np.uint32),
+        ])
         predictor_nodes = np.zeros(self.n_nodes, dtype=PREDICTOR_RECORD_DTYPE)
         self._fill_predictor_node_array(
             predictor_nodes, self.root,
@@ -438,7 +461,7 @@ class TreeGrower:
         )
         has_numerical_thresholds = numerical_thresholds is not None
         return TreePredictor(nodes=predictor_nodes,
-                             has_numerical_thresholds=has_numerical_thresholds)
+                             has_numerical_thresholds=has_numerical_thresholds,prediction_dim=self.full_gradients.shape[1])
 
     def _fill_predictor_node_array(self, predictor_nodes, grower_node,
                                    numerical_thresholds=None, next_free_idx=0):

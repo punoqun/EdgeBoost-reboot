@@ -240,7 +240,7 @@ def split_indices(context, split_info, sample_indices):
 
     X_binned = context.X_binned.T[split_info.feature_idx]
 
-    n_threads = numba.config.NUMBA_DEFAULT_NUM_THREADS
+    n_threads = 8#numba.config.NUMBA_DEFAULT_NUM_THREADS
     n_samples = sample_indices.shape[0]
 
     # Note: we could probably allocate all the arrays of size n_threads in the
