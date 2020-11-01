@@ -8,17 +8,16 @@ from EdgeBoost import GradientBoostingRegressor
 
 def test_atp1d():
     df = pd.read_csv('atp1d.csv')
-    print("what")
     target = df.loc[:, df.columns.str.startswith('LBL')]
     df.drop(target.columns, axis=1, inplace=True)
     df, target = df.to_numpy(), target.to_numpy()
     X_train, X_test, y_train, y_test = train_test_split(df, target, test_size=0.5, random_state=42, shuffle=True)
     gb = GradientBoostingRegressor(
-        l2_regularization=0.003391634274257872,
-        min_samples_leaf=10,
-        learning_rate=0.1088115324113492,
-        max_iter=199,
-        n_iter_no_change=20
+        # l2_regularization=0.003391634274257872,
+        # min_samples_leaf=10,
+        # learning_rate=0.1088115324113492,
+        # max_iter=199,
+        # n_iter_no_change=20
     )
     scaler = StandardScaler()
     scaler.fit(X_train)
@@ -29,7 +28,9 @@ def test_atp1d():
     y_Train = scalery.transform(y_train)
     y_Test = scalery.transform(y_test)
     gb.fit(train_scaled, y_Train)
-    y_preds = gb.predict_multi(test_scaled)
+    y_preds = gb.predict(test_scaled)
+    for y in y_preds:
+        print(y)
     r2 = r2_score(y_Test, y_preds, multioutput='uniform_average')
     print(r2)
 
@@ -55,7 +56,7 @@ def test_atp7d():
     # y_Train = scalery.transform(y_train)
     # y_Test = scalery.transform(y_test)
     gb.fit(X_train, y_train)
-    y_preds = gb.predict_multi(X_test)
+    y_preds = gb.predict(X_test)
     r2 = r2_score(y_test, y_preds, multioutput='uniform_average')
     print(r2)
 
@@ -82,7 +83,7 @@ def test_edm():
     y_Train = scalery.transform(y_train)
     y_Test = scalery.transform(y_test)
     gb.fit(train_scaled, y_Train)
-    y_preds = gb.predict_multi(test_scaled)
+    y_preds = gb.predict(test_scaled)
     r2 = r2_score(y_Test, y_preds, multioutput='uniform_average')
     print(r2)
 
@@ -109,7 +110,7 @@ def test_scm1d():
     # y_Train = scalery.transform(y_train)
     # y_Test = scalery.transform(y_test)
     gb.fit(X_train, y_train)
-    y_preds = gb.predict_multi(X_test)
+    y_preds = gb.predict(X_test)
     r2 = r2_score(y_test, y_preds, multioutput='uniform_average')
     print(r2)
 
@@ -137,7 +138,7 @@ def test_scm20d():
     y_Train = scalery.transform(y_train)
     y_Test = scalery.transform(y_test)
     gb.fit(train_scaled, y_Train)
-    y_preds = gb.predict_multi(test_scaled)
+    y_preds = gb.predict(test_scaled)
     r2 = r2_score(y_Test, y_preds, multioutput='uniform_average')
     print(r2)
 
@@ -164,9 +165,9 @@ def test_wq():
     y_Train = scalery.transform(y_train)
     y_Test = scalery.transform(y_test)
     gb.fit(train_scaled, y_Train)
-    y_preds = gb.predict_multi(test_scaled)
+    y_preds = gb.predict(test_scaled)
     r2 = r2_score(y_Test, y_preds, multioutput='uniform_average')
     print(r2)
 
 if __name__ == "__main__":
-    test_atp1d()
+    test_atp7d()

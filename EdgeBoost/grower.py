@@ -195,9 +195,9 @@ class TreeGrower:
         self.finalized_leaves = []
         self.total_find_split_time = 0.  # time spent finding the best splits
         self.total_apply_split_time = 0.  # time spent splitting nodes
+        self.full_gradients = full_gradients
         self._intilialize_root()
         self.n_nodes = 1
-        self.full_gradients = full_gradients
 
     def _validate_parameters(self, X_binned, max_leaf_nodes, max_depth,
                              min_samples_leaf, min_gain_to_split,
@@ -407,8 +407,12 @@ class TreeGrower:
         XGBoost: A Scalable Tree Boosting System, T. Chen, C. Guestrin, 2016
         https://arxiv.org/abs/1603.02754
         """
-        bottom_part = node.sum_hessians + self.splitting_context.l2_regularization
-        node.value = self._array_sum(node.sample_indices, bottom_part)
+        # bottom_part = node.sum_hessians + self.splitting_context.l2_regularization
+        # node.value = self._array_sum(node.sample_indices, bottom_part)
+        node.value  = (-self.shrinkage * np.sum(a=self.full_gradients[node.sample_indices, :], axis=0) / (
+                    node.sum_hessians + self.splitting_context.l2_regularization + np.finfo(np.float64).eps))
+        #
+        self.finalized_leaves.append(node)
 
     def _array_sum(self, sample_indices, bottom_part):
         summed_array = np.zeros(self.full_gradients.shape[1])

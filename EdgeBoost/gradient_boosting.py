@@ -118,6 +118,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         self._validate_parameters(X)
         self.n_features_ = X.shape[1]  # used for validation in predict()
 
+
         if X.dtype == np.uint8:  # data is pre-binned
             if self.verbose:
                 print("X is pre-binned.")
@@ -130,11 +131,11 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                 print(f"Binning {X.nbytes / 1e9:.3f} GB of data: ", end="",
                       flush=True)
             tic = time()
-            self.bin_mapper_ = BinMapper(n_bins=self.max_bins,
+            self.bin_mapper_ = BinMapper(max_bins=self.max_bins,
                                          random_state=rng)
             X_binned = self.bin_mapper_.fit_transform(X)
-            numerical_thresholds = self.bin_mapper_.bin_thresholds_
-            n_bins_per_feature = self.bin_mapper_.n_bins_non_missing_
+            numerical_thresholds = self.bin_mapper_.numerical_thresholds_
+            n_bins_per_feature = self.bin_mapper_.n_bins_per_feature_
             toc = time()
 
             if self.verbose:
@@ -143,6 +144,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                 print(f"{duration:.3f} s ({throughput / 1e6:.3f} MB/s)")
 
         self.loss_ = self._get_loss()
+
 
         do_early_stopping = (self.n_iter_no_change is not None and
                              self.n_iter_no_change > 0)
@@ -203,7 +205,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         # n_samples * n_trees_per_iteration
         gradients, hessians, proj_gradients, proj_hessians = self.loss_.init_gradients_and_hessians(
             n_samples=n_samples,
-            prediction_dim=self.prediction_dim
+            prediction_dim=self.prediction_dim, y=y_train
         )
         if not self.multi_output:
             gradients = gradients.ravel()
@@ -253,7 +255,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                 # whole array.
 
                 grower = TreeGrower(
-                    X_binned_train, gradients_at_k, hessians_at_k, full_gradients,
+                    X_binned_train, gradients_at_k, hessians_at_k, full_gradients=full_gradients,
                     max_bins=self.max_bins,
                     n_bins_per_feature=n_bins_per_feature,
                     max_leaf_nodes=self.max_leaf_nodes,
@@ -328,12 +330,9 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         Scores are computed on validation data or on training data.
         """
 
-        self.train_scores_.append(
-            self._get_scores(X_binned_train, y_train))
-
+        self.train_scores_.append(self._get_scores(X_binned_train, y_train))
         if self.validation_split is not None:
-            self.validation_scores_.append(
-                self._get_scores(X_binned_val, y_val))
+            self.validation_scores_.append(self._get_scores(X_binned_val, y_val))
             return self._should_stop(self.validation_scores_)
 
         return self._should_stop(self.train_scores_)
@@ -370,7 +369,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
 
         # Else, use the negative loss as score.
         if self.multi_output:
-            raw_predictions = self._raw_predict_multi(X)
+            raw_predictions = self._raw_predict(X)
         else:
             raw_predictions = self._raw_predict(X)
         return -self.loss_(y, raw_predictions)
@@ -390,10 +389,10 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                        for predictor in predictors_of_ith_iteration)
 
         if n_trees == 1:
-            log_msg += (f"{n_trees} tree, {n_leaves} leaves, ")
+            log_msg += f"{n_trees} tree, {n_leaves} leaves, "
         else:
-            log_msg += (f"{n_trees} trees, {n_leaves} leaves ")
-            log_msg += (f"({int(n_leaves / n_trees)} on avg), ")
+            log_msg += f"{n_trees} trees, {n_leaves} leaves "
+            log_msg += f"({int(n_leaves / n_trees)} on avg), "
 
         log_msg += f"max depth = {max_depth}, "
 
@@ -408,53 +407,52 @@ class GradientBoostingMachine(BaseEstimator, ABC):
 
         print(log_msg)
 
+    # def _raw_predict(self, X):
+    #     """Return the sum of the leaves values over all predictors.
+    #
+    #     Parameters
+    #     ----------
+    #     X : array-like, shape=(n_samples, n_features)
+    #         The input samples. If ``X.dtype == np.uint8``, the data is assumed
+    #         to be pre-binned and the estimator must have been fitted with
+    #         pre-binned data.
+    #
+    #     Returns
+    #     -------
+    #     raw_predictions : array, shape (n_samples * n_trees_per_iteration,)
+    #         The raw predicted values.
+    #     """
+    #     X = check_array(X)
+    #     check_is_fitted(self, 'predictors_')
+    #     if X.shape[1] != self.n_features_:
+    #         raise ValueError(
+    #             f'X has {X.shape[1]} features but this estimator was '
+    #             f'trained with {self.n_features_} features.'
+    #         )
+    #     is_binned = X.dtype == np.uint8
+    #     if not is_binned and self.bin_mapper_ is None:
+    #         raise ValueError(
+    #             'This estimator was fitted with pre-binned data and '
+    #             'can only predict pre-binned data as well. If your data *is* '
+    #             'already pre-binnned, convert it to uint8 using e.g. '
+    #             'X.astype(np.uint8). If the data passed to fit() was *not* '
+    #             'pre-binned, convert it to float32 and call fit() again.'
+    #         )
+    #     n_samples = X.shape[0]
+    #     raw_predictions = np.zeros(
+    #         shape=(n_samples, self.prediction_dim),
+    #         dtype=self.baseline_prediction_.dtype
+    #     )
+    #     raw_predictions += self.baseline_prediction_
+    #     for predictors_of_ith_iteration in self.predictors_:
+    #         for k, predictor in enumerate(predictors_of_ith_iteration):
+    #             predict = (predictor.predict_binned if is_binned
+    #                        else predictor.predict)
+    #             raw_predictions[:, k] += predict(X)
+    #
+    #     return raw_predictions
+
     def _raw_predict(self, X):
-        """Return the sum of the leaves values over all predictors.
-
-        Parameters
-        ----------
-        X : array-like, shape=(n_samples, n_features)
-            The input samples. If ``X.dtype == np.uint8``, the data is assumed
-            to be pre-binned and the estimator must have been fitted with
-            pre-binned data.
-
-        Returns
-        -------
-        raw_predictions : array, shape (n_samples * n_trees_per_iteration,)
-            The raw predicted values.
-        """
-        X = check_array(X)
-        check_is_fitted(self, 'predictors_')
-        if X.shape[1] != self.n_features_:
-            raise ValueError(
-                f'X has {X.shape[1]} features but this estimator was '
-                f'trained with {self.n_features_} features.'
-            )
-        is_binned = X.dtype == np.uint8
-        if not is_binned and self.bin_mapper_ is None:
-            raise ValueError(
-                'This estimator was fitted with pre-binned data and '
-                'can only predict pre-binned data as well. If your data *is* '
-                'already pre-binnned, convert it to uint8 using e.g. '
-                'X.astype(np.uint8). If the data passed to fit() was *not* '
-                'pre-binned, convert it to float32 and call fit() again.'
-            )
-        n_samples = X.shape[0]
-        raw_predictions = np.zeros(
-            shape=(n_samples, self.n_trees_per_iteration_),
-            dtype=self.baseline_prediction_.dtype
-        )
-        raw_predictions += self.baseline_prediction_
-        # Should we parallelize this?
-        for predictors_of_ith_iteration in self.predictors_:
-            for k, predictor in enumerate(predictors_of_ith_iteration):
-                predict = (predictor.predict_binned if is_binned
-                           else predictor.predict)
-                raw_predictions[:, k] += predict(X)
-
-        return raw_predictions
-
-    def _raw_predict_multi(self, X):
         """Return the sum of the leaves values over all predictors.
 
         Parameters
@@ -491,15 +489,11 @@ class GradientBoostingMachine(BaseEstimator, ABC):
             dtype=self.baseline_prediction_.dtype
         )
         raw_predictions += self.baseline_prediction_
-        # Should we parallelize this?
         for predictors_of_ith_iteration in self.predictors_:
             for k, predictor in enumerate(predictors_of_ith_iteration):
                 predict = (predictor.predict_binned if is_binned
                            else predictor.predict)
-                tmp = predict(X, self.prediction_dim)
-                if tmp.dtype != 'float32':
-                    print(tmp)
-                raw_predictions = np.add(raw_predictions, predict(X, self.prediction_dim))
+                raw_predictions = np.add(raw_predictions, predict(X))
 
         return raw_predictions
 
@@ -612,26 +606,12 @@ class GradientBoostingRegressor(GradientBoostingMachine, RegressorMixin):
         """
         # Return raw predictions after converting shape
         # (n_samples, 1) to (n_samples,)
-        return self._raw_predict(X).ravel()
+        raws = self._raw_predict(X)
+        if len(raws.shape) == 2:
+            return raws
+        else:
+            return raws.ravel()
 
-    def predict_multi(self, X):
-        """Predict values for X.
-
-        Parameters
-        ----------
-        X : array-like, shape=(n_samples, n_features)
-            The input samples. If ``X.dtype == np.uint8``, the data is assumed
-            to be pre-binned and the estimator must have been fitted with
-            pre-binned data.
-
-        Returns
-        -------
-        y : array, shape (n_samples,)
-            The predicted values.
-        """
-        # Return raw predictions after converting shape
-        # (n_samples, 1) to (n_samples,)
-        return self._raw_predict_multi(X)
 
     def _encode_y(self, y):
         # Just convert y to float32
@@ -788,7 +768,7 @@ class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
         return _LOSSES[self.loss]()
 
 
-@jit(parallel=True)
+# @jit(parallel=True)
 def _update_raw_predictions(leaves_data, raw_predictions):
     """Update raw_predictions by reading the predictions of the ith tree
     directly form the leaves.
@@ -806,5 +786,6 @@ def _update_raw_predictions(leaves_data, raw_predictions):
     """
     for leaf_idx in prange(len(leaves_data)):
         leaf_value, sample_indices = leaves_data[leaf_idx]
+        # print(leaf_value)
         for sample_idx in sample_indices:
             raw_predictions[sample_idx] += leaf_value

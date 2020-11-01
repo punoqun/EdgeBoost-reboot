@@ -1,106 +1,43 @@
 """
 This module contains the BinMapper class.
 
-BinMapper is used for mapping a real-valued dataset into integer-valued bins.
-Bin thresholds are computed with the quantiles so that each bin contains
-approximately the same number of samples.
+BinMapper is used for mapping a real-valued dataset into integer-valued bins
+with equally-spaced thresholds.
 """
-
 import numpy as np
-import sklearn
+from numba import njit, prange
 from sklearn.utils import check_random_state, check_array
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils.validation import check_is_fitted
-from numba import jit
 
 
-
-def _map_to_bins(data, binning_thresholds, missing_values_bin_idx,binned):
-    """Bin numerical values to discrete integer-coded levels.
-    Parameters
-    ----------
-    data : ndarray, shape (n_samples, n_features)
-        The numerical data to bin.
-    binning_thresholds : list of arrays
-        For each feature, stores the increasing numeric values that are
-        used to separate the bins.
-    binned : ndarray, shape (n_samples, n_features)
-        Output array, must be fortran aligned.
-    """
-
-    for feature_idx in range(data.shape[1]):
-        _map_num_col_to_bins(data[:, feature_idx],
-                             binning_thresholds[feature_idx],
-                             missing_values_bin_idx,
-                             binned[:, feature_idx])
-
-
-# @jit(parallel=True)
-def _map_num_col_to_bins(data,binning_thresholds,missing_values_bin_idx,binned):
-    """Binary search to find the bin index for each value in the data."""
-
-    for i in range(data.shape[0]):
-
-        if np.isnan(data[i]):
-            binned[i] = missing_values_bin_idx
-        else:
-            left, right = 0, binning_thresholds.shape[0]
-            while left < right:
-                middle = (right + left - 1) // 2
-                if data[i] <= binning_thresholds[middle]:
-                    right = middle
-                else:
-                    left = middle + 1
-            binned[i] = left
-
-
-def _find_binning_thresholds(data, max_bins, subsample, random_state):
-    """Extract feature-wise quantiles from numerical data.
-
-    Missing values are ignored for finding the thresholds.
-
-    Parameters
-    ----------
-    data : array-like, shape (n_samples, n_features)
-        The data to bin.
-    max_bins: int
-        The maximum number of bins to use for non-missing values. If for a
-        given feature the number of unique values is less than ``max_bins``,
-        then those unique values will be used to compute the bin thresholds,
-        instead of the quantiles.
-    subsample : int or None
-        If ``n_samples > subsample``, then ``sub_samples`` samples will be
-        randomly chosen to compute the quantiles. If ``None``, the whole data
-        is used.
-    random_state: int, RandomState instance or None
-        Pseudo-random number generator to control the random sub-sampling.
-        Pass an int for reproducible output across multiple
-        function calls.
-        See :term: `Glossary <random_state>`.
+def _find_binning_thresholds(data, max_bins=256, subsample=int(2e5),
+                             random_state=None):
+    """Extract feature-wise equally-spaced quantiles from numerical data
 
     Return
     ------
-    binning_thresholds: list of arrays
+    binning_thresholds: tuple of arrays
         For each feature, stores the increasing numeric values that can
-        be used to separate the bins. Thus ``len(binning_thresholds) ==
-        n_features``.
+        be used to separate the bins. len(binning_thresholds) == n_features.
     """
+    if not (2 <= max_bins <= 256):
+        raise ValueError(f'max_bins={max_bins} should be no smaller than 2 '
+                         f'and no larger than 256.')
     rng = check_random_state(random_state)
     if subsample is not None and data.shape[0] > subsample:
-        subset = rng.choice(data.shape[0], subsample, replace=False)
-        data = data.take(subset, axis=0)
+        subset = rng.choice(np.arange(data.shape[0]), subsample)
+        data = data[subset]
+    dtype = data.dtype
+    if dtype.kind != 'f':
+        dtype = np.float32
 
+    percentiles = np.linspace(0, 100, num=max_bins + 1)[1:-1]
     binning_thresholds = []
     for f_idx in range(data.shape[1]):
-        col_data = data[:, f_idx]
-        # ignore missing values when computing bin thresholds
-        missing_mask = np.isnan(col_data)
-        if missing_mask.any():
-            col_data = col_data[~missing_mask]
-        col_data = np.ascontiguousarray(col_data, dtype=np.float64)
+        col_data = np.ascontiguousarray(data[:, f_idx], dtype=dtype)
         distinct_values = np.unique(col_data)
         if len(distinct_values) <= max_bins:
-            midpoints = distinct_values[:-1] + distinct_values[1:]
+            midpoints = (distinct_values[:-1] + distinct_values[1:])
             midpoints *= .5
         else:
             # We sort again the data in this case. We could compute
@@ -108,135 +45,135 @@ def _find_binning_thresholds(data, max_bins, subsample, random_state):
             # np.unique(col_data, return_counts) instead but this is more
             # work and the performance benefit will be limited because we
             # work on a fixed-size subsample of the full data.
-            percentiles = np.linspace(0, 100, num=max_bins + 1)
-            percentiles = percentiles[1:-1]
             midpoints = np.percentile(col_data, percentiles,
-                                      interpolation='midpoint').astype(np.float64)
-            assert midpoints.shape[0] == max_bins - 1
-
-        # We avoid having +inf thresholds: +inf thresholds are only allowed in
-        # a "split on nan" situation.
-        np.clip(midpoints, a_min=None, a_max=1e300, out=midpoints)
-
+                                      interpolation='midpoint').astype(dtype)
         binning_thresholds.append(midpoints)
+    return tuple(binning_thresholds)
 
-    return binning_thresholds
 
-
-class BinMapper(TransformerMixin, BaseEstimator):
-    """Transformer that maps a dataset into integer-valued bins.
-
-    The bins are created in a feature-wise fashion, using quantiles so that
-    each bins contains approximately the same number of samples.
-
-    For large datasets, quantiles are computed on a subset of the data to
-    speed-up the binning, but the quantiles should remain stable.
-
-    Features with a small number of values may be binned into less than
-    ``n_bins`` bins. The last bin (at index ``n_bins - 1``) is always reserved
-    for missing values.
+def _map_to_bins(data, binning_thresholds=None, out=None):
+    """Bin numerical values to discrete integer-coded levels.
 
     Parameters
     ----------
-    n_bins : int, optional (default=256)
-        The maximum number of bins to use (including the bin for missing
-        values). Non-missing values are binned on ``max_bins = n_bins - 1``
-        bins. The last bin is always reserved for missing values. If for a
-        given feature the number of unique values is less than ``max_bins``,
-        then those unique values will be used to compute the bin thresholds,
-        instead of the quantiles.
-    subsample : int or None, optional (default=2e5)
-        If ``n_samples > subsample``, then ``sub_samples`` samples will be
-        randomly chosen to compute the quantiles. If ``None``, the whole data
-        is used.
-    random_state: int, RandomState instance or None
-        Pseudo-random number generator to control the random sub-sampling.
-        Pass an int for reproducible output across multiple
-        function calls.
-        See :term: `Glossary <random_state>`.
+    data : array-like, shape=(n_samples, n_features)
+        The numerical data to bin.
+    binning_thresholds : tuple of arrays
+        For each feature, stores the increasing numeric values that are
+        used to separate the bins.
+    out : array-like
+        If not None, write result inplace in out.
 
-    Attributes
-    ----------
-    bin_thresholds_ : list of arrays
-        For each feature, gives the real-valued bin threhsolds. There are
-        ``max_bins - 1`` thresholds, where ``max_bins = n_bins - 1`` is the
-        number of bins used for non-missing values.
-    n_bins_non_missing_ : array of uint32
-        For each feature, gives the number of bins actually used for
-        non-missing values. For features with a lot of unique values, this is
-        equal to ``n_bins - 1``.
-    missing_values_bin_idx_ : uint8
-        The index of the bin where missing values are mapped. This is a
-        constant across all features. This corresponds to the last bin, and
-        it is always equal to ``n_bins - 1``. Note that if ``n_bins_missing_``
-        is less than ``n_bins - 1`` for a given feature, then there are
-        empty (and unused) bins.
+    Returns
+    -------
+    binned_data : array of int, shape=data.shape
+        The binned data.
     """
-    def __init__(self, n_bins=256, subsample=int(2e5), random_state=None):
-        self.n_bins = n_bins
+    # TODO: add support for categorical data encoded as integers
+    # TODO: add support for sparse data (numerical or categorical)
+    if out is not None:
+        assert out.shape == data.shape
+        assert out.dtype == np.uint8
+        assert out.flags.f_contiguous
+        binned = out
+    else:
+        binned = np.zeros_like(data, dtype=np.uint8, order='F')
+
+    binning_thresholds = tuple(np.ascontiguousarray(bt, dtype=np.float32)
+                               for bt in binning_thresholds)
+
+    for feature_idx in range(data.shape[1]):
+        _map_num_col_to_bins(data[:, feature_idx],
+                             binning_thresholds[feature_idx],
+                             binned[:, feature_idx])
+    return binned
+
+
+@njit(parallel=True)
+def _map_num_col_to_bins(data, binning_thresholds, binned):
+    """Binary search to the find the bin index for each value in data."""
+    for i in prange(data.shape[0]):
+        # TODO: add support for missing values (NaN or custom marker)
+        left, right = 0, binning_thresholds.shape[0]
+        while left < right:
+            middle = (right + left - 1) // 2
+            if data[i] <= binning_thresholds[middle]:
+                right = middle
+            else:
+                left = middle + 1
+        binned[i] = left
+
+
+class BinMapper(BaseEstimator, TransformerMixin):
+    """Transformer that maps a dataset into integer-valued bins.
+
+    The bins are created in a feature-wise fashion, with equally-spaced
+    quantiles.
+
+    Large datasets are subsampled, but the feature-wise quantiles should
+    remain stable.
+
+    If the number of unique values for a given feature is less than
+    ``max_bins``, then the unique values of this feature are used instead of
+    the quantiles.
+
+    Parameters
+    ----------
+    max_bins : int, optional (default=256)
+        The maximum number of bins to use. If for a given feature the number of
+        unique values is less than ``max_bins``, then those unique values
+        will be used to compute the bin thresholds, instead of the quantiles.
+    subsample : int or None, optional (default=1e5)
+        If ``n_samples > subsample``, then ``sub_samples`` samples will be
+        randomly choosen to compute the quantiles. If ``None``, the whole data
+        is used.
+    random_state: int or numpy.random.RandomState or None, \
+        optional (default=None)
+        Pseudo-random number generator to control the random sub-sampling.
+        See `scikit-learn glossary
+        <https://scikit-learn.org/stable/glossary.html#term-random-state>`_.
+    """
+    def __init__(self, max_bins=256, subsample=int(1e5), random_state=None):
+        self.max_bins = max_bins
         self.subsample = subsample
         self.random_state = random_state
 
     def fit(self, X, y=None):
         """Fit data X by computing the binning thresholds.
 
-        The last bin is reserved for missing values, whether missing values
-        are present in the data or not.
-
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            The data to bin.
-        y: None
-            Ignored.
+        X: array-like
+            The data to bin
 
         Returns
         -------
         self : object
         """
-        if not (3 <= self.n_bins <= 256):
-            # min is 3: at least 2 distinct bins and a missing values bin
-            raise ValueError('n_bins={} should be no smaller than 3 '
-                             'and no larger than 256.'.format(self.n_bins))
-
-        X = check_array(X, dtype=[np.float64], force_all_finite=False)
-        max_bins = self.n_bins - 1
-        self.bin_thresholds_ = _find_binning_thresholds(
-            X, max_bins, subsample=self.subsample,
+        X = check_array(X)
+        self.numerical_thresholds_ = _find_binning_thresholds(
+            X, self.max_bins, subsample=self.subsample,
             random_state=self.random_state)
 
-        self.n_bins_non_missing_ = np.array(
-            [thresholds.shape[0] + 1 for thresholds in self.bin_thresholds_],
-            dtype=np.uint32)
-
-        self.missing_values_bin_idx_ = self.n_bins - 1
+        self.n_bins_per_feature_ = np.array(
+            [thresholds.shape[0] + 1
+             for thresholds in self.numerical_thresholds_],
+            dtype=np.uint32
+        )
 
         return self
 
     def transform(self, X):
         """Bin data X.
 
-        Missing values will be mapped to the last bin.
-
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            The data to bin.
+        X: array-like
+            The data to bin
 
         Returns
         -------
-        X_binned : array-like, shape (n_samples, n_features)
-            The binned data (fortran-aligned).
+        X_binned : array-like
+            The binned data
         """
-        X = check_array(X, dtype=[np.float64], force_all_finite=False)
-        check_is_fitted(self)
-        if X.shape[1] != self.n_bins_non_missing_.shape[0]:
-            raise ValueError(
-                'This estimator was fitted with {} features but {} got passed '
-                'to transform()'.format(self.n_bins_non_missing_.shape[0],
-                                        X.shape[1])
-            )
-        binned = np.zeros_like(X, dtype=np.uint8, order='F')
-        _map_to_bins(X, self.bin_thresholds_, self.missing_values_bin_idx_,
-                     binned)
-        return binned
+        return _map_to_bins(X, binning_thresholds=self.numerical_thresholds_)

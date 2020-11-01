@@ -41,7 +41,7 @@ def _expit(x):
 class BaseLoss(ABC):
     """Base class for a loss."""
 
-    def init_gradients_and_hessians(self, n_samples, prediction_dim):
+    def init_gradients_and_hessians(self, n_samples, prediction_dim, y):
         """Return initial gradients and hessians.
 
         Unless hessians are constant, arrays are initialized with undefined
@@ -71,12 +71,12 @@ class BaseLoss(ABC):
             hessians = np.ones(shape=1, dtype=np.float32)
         else:
             hessians = np.empty(shape=shape, dtype=np.float32)
-        proj_gradients, proj_hessians = self.randomly_project_gradients_and_hessians(gradients, hessians)
+        proj_gradients, proj_hessians = self.randomly_project_gradients_and_hessians(gradients, hessians, y)
         return gradients, hessians, proj_gradients, proj_hessians
 
 
-    def randomly_project_gradients_and_hessians(self, gradients, hessians,random_state=42):
-        proj_g = SparseRandomProjection(n_components=1, random_state=random_state).fit_transform(X=gradients)
+    def randomly_project_gradients_and_hessians(self, gradients, hessians, y, random_state=None):
+        proj_g = SparseRandomProjection(n_components=1, random_state=random_state).fit_transform(X=gradients,y=y)
         proj_h = hessians #SparseRandomProjection(n_components=1, random_state=self.random_state).fit_transform(X=hessians)
         return proj_g.ravel().astype(np.float32), proj_h.astype(np.float32)
 
@@ -150,8 +150,8 @@ class LeastSquares(BaseLoss):
 
     def update_gradients_and_hessians(self, gradients, hessians, y_true,
                                       raw_predictions):
-        _update_gradients_least_squares(gradients, y_true,raw_predictions)
-        return self.randomly_project_gradients_and_hessians(gradients, hessians)
+        _update_gradients_least_squares(gradients, y_true, raw_predictions)
+        return self.randomly_project_gradients_and_hessians(gradients, hessians, y=y_true)
 
 
 @njit(parallel=True, fastmath=True)

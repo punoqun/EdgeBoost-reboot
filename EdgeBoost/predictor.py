@@ -27,6 +27,7 @@ class TreePredictor:
         The nodes of the tree.
     """
     def __init__(self, nodes, has_numerical_thresholds=True, prediction_dim=1):
+        self.prediction_dim = prediction_dim
         self.nodes = nodes
         self.has_numerical_thresholds = has_numerical_thresholds
         out_type = str(prediction_dim) + 'f8'
@@ -52,7 +53,7 @@ class TreePredictor:
         """Return maximum depth among all leaves."""
         return int(self.nodes['depth'].max())
 
-    def predict_binned(self, binned_data, prediction_dim, out=None):
+    def predict_binned(self, binned_data, out=None):
         """Predict raw values for binned data.
 
         Parameters
@@ -72,11 +73,11 @@ class TreePredictor:
             raise ValueError('binned_data dtype should be uint8')
 
         if out is None:
-            out = np.empty((binned_data.shape[0], prediction_dim), dtype=np.float32)
+            out = np.empty((binned_data.shape[0], self.prediction_dim), dtype=np.float32)
         _predict_binned(self.nodes, binned_data, out)
         return out
 
-    def predict(self, X, prediction_dim):
+    def predict(self, X):
         """Predict raw values for non-binned data.
 
         Parameters
@@ -105,7 +106,7 @@ class TreePredictor:
                 'as numerical data'
             )
 
-        out = np.empty((X.shape[0], prediction_dim), dtype=np.float32)
+        out = np.empty((X.shape[0], self.prediction_dim), dtype=np.float32)
         _predict_from_numeric_data(self.nodes, X, out)
         return out
 
