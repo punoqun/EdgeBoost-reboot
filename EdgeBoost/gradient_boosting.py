@@ -234,7 +234,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                       flush=True)
 
             # Update gradients and hessians, inplace
-            self.loss_.update_gradients_and_hessians(gradients, hessians,
+            proj_gradients, proj_hessians = self.loss_.update_gradients_and_hessians(gradients, hessians,
                                                      y_train, raw_predictions)
 
             predictors.append([])
