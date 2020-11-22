@@ -2,8 +2,7 @@
 This module contains the TreePredictor class which is used for prediction.
 """
 import numpy as np
-from numba import njit, prange
-
+from numba import njit, prange, jit
 
 PREDICTOR_RECORD_DTYPE = np.dtype([
     ('is_leaf', np.uint8),
@@ -111,9 +110,6 @@ class TreePredictor:
         return out
 
 
-
-
-# ##########################Multi###############################
 def _predict_one_binned(nodes, binned_data):
     node = nodes[0]
     while True:

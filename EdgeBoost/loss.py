@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 
 from scipy.special import expit, logsumexp
 from sklearn.random_projection import SparseRandomProjection
+from sklearn.decomposition import FastICA
 import numpy as np
 from numba import njit, prange
 from numba import jit
@@ -31,6 +32,14 @@ def _logsumexp(a):
     s = np.sum(np.exp(a - a_max))
     return np.log(s) + a_max
 
+@jit()
+def fillnan(array):
+    out = array.copy()
+    for row_idx in prange(out.shape[0]):
+        for col_idx in prange(1, out.shape[1]):
+            if np.isnan(out[row_idx, col_idx]):
+                out[row_idx, col_idx] = 0
+    return out
 
 @jit(fastmath=True)
 def _expit(x):
@@ -74,11 +83,13 @@ class BaseLoss(ABC):
         proj_gradients, proj_hessians = self.randomly_project_gradients_and_hessians(gradients, hessians, y)
         return gradients, hessians, proj_gradients, proj_hessians
 
-
     def randomly_project_gradients_and_hessians(self, gradients, hessians, y, random_state=None):
-        proj_g = SparseRandomProjection(n_components=1, random_state=random_state).fit_transform(X=gradients,y=y)
+        # gradients = fillnan(gradients)
+        proj_g = SparseRandomProjection(n_components=1, random_state=random_state,).fit_transform(X=gradients,y=y)
         proj_h = hessians #SparseRandomProjection(n_components=1, random_state=self.random_state).fit_transform(X=hessians)
         return proj_g.ravel().astype(np.float32), proj_h.astype(np.float32)
+
+
 
     @abstractmethod
     def get_baseline_prediction(self, y_train, prediction_dim):

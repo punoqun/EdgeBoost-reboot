@@ -10,6 +10,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import check_X_y, check_random_state, check_array
 from numba import cuda, prange
+from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+import warnings
+
+warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
+warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_is_fitted
 
@@ -768,7 +773,7 @@ class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
         return _LOSSES[self.loss]()
 
 
-# @jit(parallel=True)
+@jit(parallel=True)
 def _update_raw_predictions(leaves_data, raw_predictions):
     """Update raw_predictions by reading the predictions of the ith tree
     directly form the leaves.
