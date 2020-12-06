@@ -3,6 +3,7 @@ This module contains the TreePredictor class which is used for prediction.
 """
 import numpy as np
 from numba import njit, prange, jit
+from multiprocessing import Process
 
 PREDICTOR_RECORD_DTYPE = np.dtype([
     ('is_leaf', np.uint8),
@@ -110,27 +111,31 @@ class TreePredictor:
         return out
 
 
-def _predict_one_binned(nodes, binned_data):
+def _predict_one_binned(nodes, binned_data, out, idx):
     node = nodes[0]
     while True:
         if node['is_leaf']:
-            return node['value']
+            out[idx] = node['value']
+            return
         if binned_data[node['feature_idx']] <= node['bin_threshold']:
             node = nodes[node['left']]
         else:
             node = nodes[node['right']]
 
 
-def _predict_binned(nodes, binned_data, out):
+def _predict_binned(nodes, binned_data, out, thread=0, n_threads=1):
     for i in prange(binned_data.shape[0]):
-        out[i] = _predict_one_binned(nodes, binned_data[i])
+        p = Process(target=_predict_one_binned, args=(nodes, binned_data[i], out, i))
+        p.start()
+        p.join()
 
 
-def _predict_one_from_numeric_data(nodes, numeric_data):
+def _predict_one_from_numeric_data(nodes, numeric_data, out, idx):
     node = nodes[0]
     while True:
         if node['is_leaf']:
-            return node['value']
+            out[idx] = node['value']
+            return
         if numeric_data[node['feature_idx']] <= node['threshold']:
             node = nodes[node['left']]
         else:
@@ -139,5 +144,7 @@ def _predict_one_from_numeric_data(nodes, numeric_data):
 
 def _predict_from_numeric_data(nodes, numeric_data, out):
     for i in prange(numeric_data.shape[0]):
-        out[i] = _predict_one_from_numeric_data(nodes, numeric_data[i])
+        p = Process(target=_predict_one_from_numeric_data, args=(nodes, numeric_data[i], out, i))
+        p.start()
+        p.join()
 
