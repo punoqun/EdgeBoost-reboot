@@ -46,6 +46,7 @@ def test_atp7d():
         learning_rate=0.22445307581959334,
         max_iter=279,
         n_iter_no_change=None,
+        verbose = 1,
     )
     # scaler = StandardScaler()
     # scaler.fit(X_train)

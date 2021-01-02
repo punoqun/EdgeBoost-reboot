@@ -124,9 +124,13 @@ def _predict_one_binned(nodes, binned_data, out, idx):
 
 
 def _predict_binned(nodes, binned_data, out, thread=0, n_threads=1):
+    processes = []
     for i in prange(binned_data.shape[0]):
         p = Process(target=_predict_one_binned, args=(nodes, binned_data[i], out, i))
+        processes.append(p)
+    for p in processes:
         p.start()
+    for p in processes:
         p.join()
 
 
@@ -143,8 +147,17 @@ def _predict_one_from_numeric_data(nodes, numeric_data, out, idx):
 
 
 def _predict_from_numeric_data(nodes, numeric_data, out):
+    processes = []
+    print('multiprocessing')
     for i in prange(numeric_data.shape[0]):
+        print(i)
         p = Process(target=_predict_one_from_numeric_data, args=(nodes, numeric_data[i], out, i))
+        processes.append((i,p))
+    for i,p in processes:
+        print(i)
         p.start()
+    for i,p in processes:
+
+        print(i)
         p.join()
 
