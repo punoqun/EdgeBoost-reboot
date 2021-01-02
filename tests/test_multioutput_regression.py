@@ -45,7 +45,7 @@ def test_atp7d():
         min_samples_leaf=12,
         learning_rate=0.22445307581959334,
         max_iter=279,
-        n_iter_no_change=None,
+        n_iter_no_change=30,
         verbose = 1,
     )
     # scaler = StandardScaler()
