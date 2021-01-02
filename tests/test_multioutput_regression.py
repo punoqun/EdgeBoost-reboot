@@ -45,7 +45,8 @@ def test_atp7d():
         min_samples_leaf=12,
         learning_rate=0.22445307581959334,
         max_iter=279,
-        n_iter_no_change=23,
+        n_iter_no_change=30,
+        verbose = 1,
     )
     # scaler = StandardScaler()
     # scaler.fit(X_train)
@@ -56,6 +57,7 @@ def test_atp7d():
     # y_Train = scalery.transform(y_train)
     # y_Test = scalery.transform(y_test)
     gb.fit(X_train, y_train)
+    print('Fitting end')
     y_preds = gb.predict(X_test)
     r2 = r2_score(y_test, y_preds, multioutput='uniform_average')
     print(r2)
