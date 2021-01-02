@@ -373,10 +373,8 @@ class GradientBoostingMachine(BaseEstimator, ABC):
             return self.scorer_(self, X, y)
 
         # Else, use the negative loss as score.
-        if self.multi_output:
-            raw_predictions = self._raw_predict(X)
-        else:
-            raw_predictions = self._raw_predict(X)
+
+        raw_predictions = self._raw_predict(X)
         return -self.loss_(y, raw_predictions)
 
     def _print_iteration_stats(self, iteration_start_time, do_early_stopping):

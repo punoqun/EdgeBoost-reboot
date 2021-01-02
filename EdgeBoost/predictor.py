@@ -3,7 +3,6 @@ This module contains the TreePredictor class which is used for prediction.
 """
 import numpy as np
 from numba import njit, prange, jit
-from multiprocessing import Process
 
 PREDICTOR_RECORD_DTYPE = np.dtype([
     ('is_leaf', np.uint8),
@@ -111,35 +110,27 @@ class TreePredictor:
         return out
 
 
-def _predict_one_binned(nodes, binned_data, out, idx):
+def _predict_one_binned(nodes, binned_data):
     node = nodes[0]
     while True:
         if node['is_leaf']:
-            out[idx] = node['value']
-            return
+            return node['value']
         if binned_data[node['feature_idx']] <= node['bin_threshold']:
             node = nodes[node['left']]
         else:
             node = nodes[node['right']]
 
 
-def _predict_binned(nodes, binned_data, out, thread=0, n_threads=1):
-    processes = []
+def _predict_binned(nodes, binned_data, out):
     for i in prange(binned_data.shape[0]):
-        p = Process(target=_predict_one_binned, args=(nodes, binned_data[i], out, i))
-        processes.append(p)
-    for p in processes:
-        p.start()
-    for p in processes:
-        p.join()
+        out[i] = _predict_one_binned(nodes, binned_data[i])
 
 
-def _predict_one_from_numeric_data(nodes, numeric_data, out, idx):
+def _predict_one_from_numeric_data(nodes, numeric_data):
     node = nodes[0]
     while True:
         if node['is_leaf']:
-            out[idx] = node['value']
-            return
+            return node['value']
         if numeric_data[node['feature_idx']] <= node['threshold']:
             node = nodes[node['left']]
         else:
@@ -147,17 +138,6 @@ def _predict_one_from_numeric_data(nodes, numeric_data, out, idx):
 
 
 def _predict_from_numeric_data(nodes, numeric_data, out):
-    processes = []
-    print('multiprocessing')
     for i in prange(numeric_data.shape[0]):
-        print(i)
-        p = Process(target=_predict_one_from_numeric_data, args=(nodes, numeric_data[i], out, i))
-        processes.append((i,p))
-    for i,p in processes:
-        print(i)
-        p.start()
-    for i,p in processes:
-
-        print(i)
-        p.join()
+        out[i] = _predict_one_from_numeric_data(nodes, numeric_data[i])
 
