@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error
 
 from EdgeBoost import GradientBoostingRegressor
 
@@ -41,11 +42,12 @@ def test_atp7d():
     df, target = df.to_numpy(), target.to_numpy()
     X_train, X_test, y_train, y_test = train_test_split(df, target, test_size=0.5, random_state=42, shuffle=True)
     gb = GradientBoostingRegressor(
+        scoring='neg_mean_absolute_error' ,
         l2_regularization=0.880826520747869,
         min_samples_leaf=12,
         learning_rate=0.22445307581959334,
-        max_iter=279,
-        n_iter_no_change=30,
+        max_iter=9999,
+        n_iter_no_change=100,
         verbose = 1,
     )
     # scaler = StandardScaler()
