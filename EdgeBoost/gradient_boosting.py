@@ -22,6 +22,7 @@ from .binning import BinMapper
 
 from .grower import TreeGrower
 from .loss import _LOSSES
+import gc
 
 
 class GradientBoostingMachine(BaseEstimator, ABC):
@@ -241,7 +242,8 @@ class GradientBoostingMachine(BaseEstimator, ABC):
             # Update gradients and hessians, inplace
             proj_gradients, proj_hessians = self.loss_.update_gradients_and_hessians(gradients, hessians,
                                                      y_train, raw_predictions)
-
+            
+            gc.collect()
             predictors.append([])
             # if self.multi_output:
             #     proj_gradients, proj_hessians = self.randomly_project_gradients_and_hessians(gradients, hessians)

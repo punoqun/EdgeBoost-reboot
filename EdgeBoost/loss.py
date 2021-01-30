@@ -5,7 +5,7 @@ Specific losses are used for regression, binary classification or multiclass
 classification.
 """
 from abc import ABC, abstractmethod
-
+import random
 from scipy.special import expit, logsumexp
 from sklearn.random_projection import SparseRandomProjection
 from sklearn.decomposition import FastICA
@@ -86,15 +86,12 @@ class BaseLoss(ABC):
 
     def randomly_project_gradients_and_hessians(self, gradients, hessians, y, random_state=None):
         # gradients = fillnan(gradients)
-        for i in range(7):
-            try:
-                proj_g = SparseRandomProjection(n_components=1, random_state=random_state, dense_output=True,).fit_transform(X=gradients,y=y)
-                break
-            except ValueError:
-                pass
-            if i == 5:
-                warnings.warn('Couldn\'t project the gradients so applied fillnan')
-                gradients = fillnan(gradients)
+        try:
+            proj_g = SparseRandomProjection(n_components=1, random_state=random_state, dense_output=True,).fit_transform(X=gradients,y=y)
+        except ValueError:
+            warnings.warn('Couldn\'t project the gradients so applied fillnan')
+            gradients = np.nan_to_num(gradients)
+            proj_g = SparseRandomProjection(n_components=1, random_state=random.randint(1, 1000), dense_output=True,).fit_transform(X=gradients,y=y)
         proj_h = hessians #SparseRandomProjection(n_components=1, random_state=self.random_state).fit_transform(X=hessians)
         return proj_g.ravel().astype(np.float32), proj_h.astype(np.float32)
 
