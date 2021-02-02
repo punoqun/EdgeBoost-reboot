@@ -29,7 +29,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
     @abstractmethod
     def __init__(self, loss, learning_rate, max_iter, max_leaf_nodes,
                  max_depth, min_samples_leaf, l2_regularization, max_bins,
-                 scoring, validation_split, n_iter_no_change, tol, verbose, eval_set,
+                 scoring, validation_split, n_iter_no_change, tol, verbose,
                  random_state):
         self.loss = loss
         self.learning_rate = learning_rate
@@ -44,7 +44,6 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         self.scoring = scoring
         self.tol = tol
         self.verbose = verbose
-        self.eval_set = eval_set
         self.random_state = random_state
 
     def _validate_parameters(self, X):
@@ -82,7 +81,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                     f'pre-binned with {max_bin_index + 1} bins.'
                 )
 
-    def fit(self, X, y):
+    def fit(self, X, y, eval_set=None):
         """Fit the gradient boosting model.
 
         Parameters
@@ -173,8 +172,8 @@ class GradientBoostingMachine(BaseEstimator, ABC):
             X_binned_train = np.asfortranarray(X_binned_train)
 
             # stratify for classification
-        elif do_early_stopping and self.eval_set is not None:
-            X_binned_train, X_binned_val, y_train, y_val = X_binned, self.eval_set[0], y, self.eval_set[1]
+        elif do_early_stopping and eval_set is not None:
+            X_binned_train, X_binned_val, y_train, y_val = X_binned, eval_set[0], y, eval_set[1]
             if X_binned_train.size == 0 or X_binned_val.size == 0:
                 raise ValueError(
                     f'Not enough data (n_samples={X_binned.shape[0]}) to '
@@ -595,14 +594,14 @@ class GradientBoostingRegressor(GradientBoostingMachine, RegressorMixin):
                  max_iter=100, max_leaf_nodes=31, max_depth=None,
                  min_samples_leaf=20, l2_regularization=0., max_bins=256,
                  scoring=None, validation_split=None, n_iter_no_change=5,
-                 tol=1e-7, verbose=0, eval_set=None, random_state=None):
+                 tol=1e-7, verbose=0, random_state=None):
         super(GradientBoostingRegressor, self).__init__(
             loss=loss, learning_rate=learning_rate, max_iter=max_iter,
             max_leaf_nodes=max_leaf_nodes, max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             l2_regularization=l2_regularization, max_bins=max_bins,
             scoring=scoring, validation_split=validation_split,
-            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose, eval_set=eval_set,
+            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose,
             random_state=random_state)
 
     def predict(self, X):
@@ -711,14 +710,14 @@ class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
                  max_leaf_nodes=31, max_depth=None, min_samples_leaf=20,
                  l2_regularization=0., max_bins=256, scoring=None,
                  validation_split=None, n_iter_no_change=5, tol=1e-7,
-                 verbose=0, eval_set=None, random_state=None):
+                 verbose=0, random_state=None):
         super(GradientBoostingClassifier, self).__init__(
             loss=loss, learning_rate=learning_rate, max_iter=max_iter,
             max_leaf_nodes=max_leaf_nodes, max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             l2_regularization=l2_regularization, max_bins=max_bins,
             scoring=scoring, validation_split=validation_split,
-            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose, eval_set=eval_set,
+            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose,
             random_state=random_state)
 
     def predict(self, X):

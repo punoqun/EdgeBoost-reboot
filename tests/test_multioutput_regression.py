@@ -48,6 +48,7 @@ def test_atp7d():
         learning_rate=0.22445307581959334,
         max_iter=9999,
         n_iter_no_change=100,
+        validation_split=0.1,
         verbose = 1,
     )
     # scaler = StandardScaler()
