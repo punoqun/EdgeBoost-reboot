@@ -29,7 +29,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
     @abstractmethod
     def __init__(self, loss, learning_rate, max_iter, max_leaf_nodes,
                  max_depth, min_samples_leaf, l2_regularization, max_bins,
-                 scoring, validation_split, n_iter_no_change, tol, verbose,
+                 scoring, validation_split, n_iter_no_change, tol, verbose, eval_set,
                  random_state):
         self.loss = loss
         self.learning_rate = learning_rate
@@ -44,6 +44,7 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         self.scoring = scoring
         self.tol = tol
         self.verbose = verbose
+        self.eval_set = eval_set
         self.random_state = random_state
 
     def _validate_parameters(self, X):
@@ -124,7 +125,6 @@ class GradientBoostingMachine(BaseEstimator, ABC):
         self._validate_parameters(X)
         self.n_features_ = X.shape[1]  # used for validation in predict()
 
-
         if X.dtype == np.uint8:  # data is pre-binned
             if self.verbose:
                 print("X is pre-binned.")
@@ -151,12 +151,10 @@ class GradientBoostingMachine(BaseEstimator, ABC):
 
         self.loss_ = self._get_loss()
 
-
         do_early_stopping = (self.n_iter_no_change is not None and
                              self.n_iter_no_change > 0)
 
         if do_early_stopping and self.validation_split is not None:
-            # stratify for classification
             stratify = y if hasattr(self.loss_, 'predict_proba') else None
 
             X_binned_train, X_binned_val, y_train, y_val = train_test_split(
@@ -171,6 +169,19 @@ class GradientBoostingMachine(BaseEstimator, ABC):
                 )
             # Predicting is faster of C-contiguous arrays, training is faster
             # on Fortran arrays.
+            X_binned_val = np.ascontiguousarray(X_binned_val)
+            X_binned_train = np.asfortranarray(X_binned_train)
+
+            # stratify for classification
+        elif do_early_stopping and self.eval_set is not None:
+            X_binned_train, X_binned_val, y_train, y_val = X_binned, self.eval_set[0], y, self.eval_set[1]
+            if X_binned_train.size == 0 or X_binned_val.size == 0:
+                raise ValueError(
+                    f'Not enough data (n_samples={X_binned.shape[0]}) to '
+                    f'perform early stopping with validation_split='
+                    f'{self.validation_split}. Use more training data or '
+                    f'adjust validation_split.'
+                )
             X_binned_val = np.ascontiguousarray(X_binned_val)
             X_binned_train = np.asfortranarray(X_binned_train)
         else:
@@ -241,8 +252,8 @@ class GradientBoostingMachine(BaseEstimator, ABC):
 
             # Update gradients and hessians, inplace
             proj_gradients, proj_hessians = self.loss_.update_gradients_and_hessians(gradients, hessians,
-                                                     y_train, raw_predictions)
-            
+                                                                                     y_train, raw_predictions)
+
             gc.collect()
             predictors.append([])
             # if self.multi_output:
@@ -583,15 +594,15 @@ class GradientBoostingRegressor(GradientBoostingMachine, RegressorMixin):
     def __init__(self, loss='least_squares', learning_rate=0.1,
                  max_iter=100, max_leaf_nodes=31, max_depth=None,
                  min_samples_leaf=20, l2_regularization=0., max_bins=256,
-                 scoring=None, validation_split=0.1, n_iter_no_change=5,
-                 tol=1e-7, verbose=0, random_state=None):
+                 scoring=None, validation_split=None, n_iter_no_change=5,
+                 tol=1e-7, verbose=0, eval_set=None, random_state=None):
         super(GradientBoostingRegressor, self).__init__(
             loss=loss, learning_rate=learning_rate, max_iter=max_iter,
             max_leaf_nodes=max_leaf_nodes, max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             l2_regularization=l2_regularization, max_bins=max_bins,
             scoring=scoring, validation_split=validation_split,
-            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose,
+            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose, eval_set=eval_set,
             random_state=random_state)
 
     def predict(self, X):
@@ -616,7 +627,6 @@ class GradientBoostingRegressor(GradientBoostingMachine, RegressorMixin):
             return raws
         else:
             return raws.ravel()
-
 
     def _encode_y(self, y):
         # Just convert y to float32
@@ -700,15 +710,15 @@ class GradientBoostingClassifier(GradientBoostingMachine, ClassifierMixin):
     def __init__(self, loss='auto', learning_rate=0.1, max_iter=100,
                  max_leaf_nodes=31, max_depth=None, min_samples_leaf=20,
                  l2_regularization=0., max_bins=256, scoring=None,
-                 validation_split=0.1, n_iter_no_change=5, tol=1e-7,
-                 verbose=0, random_state=None):
+                 validation_split=None, n_iter_no_change=5, tol=1e-7,
+                 verbose=0, eval_set=None, random_state=None):
         super(GradientBoostingClassifier, self).__init__(
             loss=loss, learning_rate=learning_rate, max_iter=max_iter,
             max_leaf_nodes=max_leaf_nodes, max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             l2_regularization=l2_regularization, max_bins=max_bins,
             scoring=scoring, validation_split=validation_split,
-            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose,
+            n_iter_no_change=n_iter_no_change, tol=tol, verbose=verbose, eval_set=eval_set,
             random_state=random_state)
 
     def predict(self, X):
